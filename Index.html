@@ -1,0 +1,1184 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Shield, AlertTriangle, Camera, Bell, MapPin, Clock, Settings, Phone, Lock, Unlock, Fingerprint, Volume2, User, BarChart3, Map, Users } from 'lucide-react';
+
+export default function ControlLockApp() {
+  const [currentView, setCurrentView] = useState('home');
+  const [isAlarmActive, setIsAlarmActive] = useState(false);
+  const [isDeviceLocked, setIsDeviceLocked] = useState(false);
+  const [showFingerprint, setShowFingerprint] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [isSirenPlaying, setIsSirenPlaying] = useState(false);
+  const audioContextRef = useRef(null);
+  const oscillatorRef = useRef(null);
+  const gainNodeRef = useRef(null);
+  const [selectedCamera, setSelectedCamera] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  const [incidents, setIncidents] = useState([
+    { id: 1, type: 'Robo', zone: 'Zona A - Av. Principal', time: '10:30 AM', status: 'Resuelto', date: '05/12/2024' },
+    { id: 2, type: 'Sospechoso', zone: 'Zona B - Parque Central', time: '11:45 AM', status: 'En proceso', date: '05/12/2024' },
+    { id: 3, type: 'Emergencia', zone: 'Zona C - Residencial', time: '2:15 PM', status: 'Resuelto', date: '04/12/2024' },
+    { id: 4, type: 'Alerta', zone: 'Zona A - Comercial', time: '3:30 PM', status: 'Verificado', date: '04/12/2024' },
+    { id: 5, type: 'Robo', zone: 'Zona D - Centro', time: '5:00 PM', status: 'Resuelto', date: '03/12/2024' }
+  ]);
+
+  const [users, setUsers] = useState([
+    { id: 1, name: 'Juan Pérez', role: 'Administrador', status: 'Activo', lastSeen: 'Hace 5 min' },
+    { id: 2, name: 'María González', role: 'Usuario', status: 'Activo', lastSeen: 'Hace 1 hora' },
+    { id: 3, name: 'Carlos Ruiz', role: 'Usuario', status: 'Inactivo', lastSeen: 'Hace 2 días' }
+  ]);
+
+  const [statistics, setStatistics] = useState({
+    totalIncidents: 156,
+    resolved: 142,
+    inProgress: 8,
+    pending: 6,
+    thisMonth: 23,
+    lastMonth: 19,
+    highRiskZones: 3
+  });
+
+  const [recordings] = useState([
+    { id: 1, camera: 'Entrada Principal', date: '09/12/2024', time: '10:30 AM', duration: '2:15 min', thumbnail: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=200' },
+    { id: 2, camera: 'Estacionamiento', date: '09/12/2024', time: '09:15 AM', duration: '5:40 min', thumbnail: 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=200' },
+    { id: 3, camera: 'Jardín Trasero', date: '08/12/2024', time: '11:20 PM', duration: '1:30 min', thumbnail: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=200' },
+    { id: 4, camera: 'Sala Principal', date: '08/12/2024', time: '03:45 PM', duration: '3:20 min', thumbnail: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=200' },
+    { id: 5, camera: 'Pasillo', date: '07/12/2024', time: '08:00 AM', duration: '4:10 min', thumbnail: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=200' }
+  ]);
+
+  const cameras = [
+    { id: 1, name: 'Entrada Principal', img: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400' },
+    { id: 2, name: 'Estacionamiento', img: 'https://images.unsplash.com/photo-1590674899484-d5640e854abe?w=400' },
+    { id: 3, name: 'Jardín Trasero', img: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?w=400' },
+    { id: 4, name: 'Sala Principal', img: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400' },
+    { id: 5, name: 'Pasillo', img: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400' },
+    { id: 6, name: 'Cocina', img: 'https://images.unsplash.com/photo-1556911220-bff31c812dba?w=400' }
+  ];
+
+  // Función para crear sonido de sirena de TSUNAMI (más intensa y dramática)
+  const playSiren = () => {
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      
+      const audioContext = audioContextRef.current;
+      
+      // Detener sirena anterior si existe
+      if (oscillatorRef.current) {
+        try {
+          oscillatorRef.current.stop();
+        } catch (e) {}
+      }
+
+      // Crear nuevo oscilador para la sirena tipo TSUNAMI
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+      
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+      
+      oscillator.type = 'sawtooth'; // Sonido más agresivo tipo tsunami
+      oscillator.frequency.value = 400; // Frecuencia inicial baja
+      gainNode.gain.value = 0.5; // Volumen más alto
+      
+      // Efecto de sirena de tsunami - sube y baja lentamente como alarma de emergencia
+      let increasing = true;
+      let currentFreq = 400;
+      const sirenInterval = setInterval(() => {
+        if (increasing) {
+          currentFreq += 15;
+          oscillator.frequency.value = currentFreq;
+          if (currentFreq >= 800) increasing = false;
+        } else {
+          currentFreq -= 15;
+          oscillator.frequency.value = currentFreq;
+          if (currentFreq <= 400) increasing = true;
+        }
+      }, 50); // Más rápido para efecto de tsunami
+      
+      oscillator.start();
+      oscillatorRef.current = oscillator;
+      gainNodeRef.current = gainNode;
+      
+      // Auto-detener después de 4 segundos
+      setTimeout(() => {
+        clearInterval(sirenInterval);
+        stopSiren();
+      }, 4000);
+      
+      setIsSirenPlaying(true);
+    } catch (error) {
+      console.log('Audio no soportado en este navegador');
+    }
+  };
+
+  const stopSiren = () => {
+    if (oscillatorRef.current) {
+      try {
+        oscillatorRef.current.stop();
+        oscillatorRef.current = null;
+      } catch (e) {}
+    }
+    setIsSirenPlaying(false);
+  };
+
+  // Efecto para sirena en modo bloqueado
+  useEffect(() => {
+    if (isDeviceLocked) {
+      const interval = setInterval(() => {
+        playSiren();
+      }, 4000);
+      return () => {
+        clearInterval(interval);
+        stopSiren();
+      };
+    }
+  }, [isDeviceLocked]);
+
+  const handleEmergencyLock = () => {
+    playSiren();
+    setIsDeviceLocked(true);
+    addNotification('🚨 MODO ROBO ACTIVADO - Dispositivo bloqueado y sirena encendida');
+    // Vibrar si está disponible
+    if (navigator.vibrate) {
+      navigator.vibrate([200, 100, 200, 100, 200]);
+    }
+  };
+
+  const handleFingerprint = () => {
+    // NO reproduce sirena al desbloquear
+    setShowFingerprint(true);
+    setTimeout(() => {
+      setIsDeviceLocked(false);
+      setShowFingerprint(false);
+      stopSiren();
+      addNotification('✅ Dispositivo desbloqueado con huella digital');
+    }, 2000);
+  };
+
+  const addNotification = (msg) => {
+    setNotifications(prev => [...prev, { id: Date.now(), msg }]);
+  };
+
+  const reportIncident = (type) => {
+    playSiren();
+    const newIncident = {
+      id: Date.now(),
+      type: type,
+      zone: 'Tu ubicación actual',
+      time: new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }),
+      status: 'Reportado',
+      date: new Date().toLocaleDateString('es-PE')
+    };
+    setIncidents([newIncident, ...incidents]);
+    addNotification(`✅ ${type} reportado - Autoridades notificadas`);
+    setStatistics(prev => ({ ...prev, totalIncidents: prev.totalIncidents + 1, pending: prev.pending + 1 }));
+  };
+
+  const toggleAlarm = () => {
+    playSiren();
+    setIsAlarmActive(!isAlarmActive);
+    addNotification(isAlarmActive ? '🔓 Alarma desactivada' : '🔒 Alarma activada');
+  };
+
+  const handleButtonClick = (action) => {
+    playSiren();
+    addNotification(`🔔 ${action}`);
+  };
+
+  if (isDeviceLocked && !showFingerprint) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center relative overflow-hidden">
+        {/* Efecto de luces rojas parpadeantes */}
+        <div className="absolute inset-0 bg-red-900 opacity-20 animate-pulse"></div>
+        <div className="absolute inset-0 bg-red-600 opacity-10 animate-pulse" style={{animationDelay: '0.5s'}}></div>
+        
+        {/* Contenido principal */}
+        <div className="text-center p-8 relative z-10">
+          <Volume2 className="w-40 h-40 text-red-600 mx-auto mb-8 animate-bounce drop-shadow-2xl" />
+          
+          {/* Título con efecto de parpadeo */}
+          <h1 className="text-7xl font-bold text-red-600 mb-6 animate-pulse drop-shadow-2xl">
+            ⚠️ BLOQUEADO ⚠️
+          </h1>
+          
+          <div className="bg-black border-4 border-red-600 rounded-2xl p-6 mb-6 animate-pulse">
+            <p className="text-white text-3xl mb-4 font-bold">
+              DISPOSITIVO ROBADO
+            </p>
+            <div className="text-red-500 text-4xl mb-4 font-mono animate-pulse">
+              🚨 ALARMA ANTI ROBO 🚨
+            </div>
+            <div className="text-yellow-400 text-xl mb-4 animate-bounce">
+              ⚡ SIRENA DE EMERGENCIA ACTIVADA ⚡
+            </div>
+          </div>
+          
+          {/* Barras de advertencia */}
+          <div className="space-y-2 mb-8">
+            <div className="bg-yellow-500 h-2 animate-pulse"></div>
+            <div className="bg-red-600 h-2 animate-pulse" style={{animationDelay: '0.2s'}}></div>
+            <div className="bg-yellow-500 h-2 animate-pulse" style={{animationDelay: '0.4s'}}></div>
+          </div>
+
+          <p className="text-red-400 text-xl mb-8 font-bold animate-pulse">
+            🔒 SISTEMA DE SEGURIDAD MÁXIMO ACTIVADO 🔒
+          </p>
+          
+          <button
+            onClick={handleFingerprint}
+            className="bg-blue-600 text-white px-10 py-5 rounded-xl text-2xl hover:bg-blue-700 transition shadow-2xl font-bold border-4 border-blue-400 animate-pulse"
+          >
+            <Fingerprint className="inline mr-3 w-8 h-8" />
+            Desbloquear con Huella
+          </button>
+
+          <p className="text-gray-500 text-sm mt-6">
+            Intento de acceso no autorizado detectado
+          </p>
+        </div>
+
+        {/* Efecto de esquinas rojas */}
+        <div className="absolute top-0 left-0 w-32 h-32 border-t-8 border-l-8 border-red-600"></div>
+        <div className="absolute top-0 right-0 w-32 h-32 border-t-8 border-r-8 border-red-600"></div>
+        <div className="absolute bottom-0 left-0 w-32 h-32 border-b-8 border-l-8 border-red-600"></div>
+        <div className="absolute bottom-0 right-0 w-32 h-32 border-b-8 border-r-8 border-red-600"></div>
+      </div>
+    );
+  }
+
+  if (showFingerprint) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-900 to-purple-900 flex items-center justify-center">
+        <div className="text-center">
+          <Fingerprint className="w-48 h-48 text-white mx-auto mb-8 animate-pulse" />
+          <div className="flex space-x-2 justify-center mb-4">
+            <div className="w-4 h-4 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0s'}}></div>
+            <div className="w-4 h-4 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+            <div className="w-4 h-4 bg-blue-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+          </div>
+          <p className="text-white text-2xl">Verificando huella digital...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 text-white pb-24">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-blue-900 to-blue-800 p-4 shadow-2xl sticky top-0 z-50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="bg-white p-2 rounded-lg">
+              <Shield className="w-8 h-8 text-blue-600" />
+            </div>
+            <h1 className="text-2xl font-bold">Control Lock</h1>
+          </div>
+          <div className="flex items-center space-x-3">
+            <div className={`w-3 h-3 rounded-full ${isAlarmActive ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
+            <span className="text-sm font-semibold">{isAlarmActive ? 'ALARMA ON' : 'Seguro'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Notifications Bar */}
+      {notifications.length > 0 && (
+        <div className="bg-gradient-to-r from-yellow-600 to-orange-600 p-3 overflow-hidden shadow-lg">
+          <div className="animate-marquee whitespace-nowrap text-white font-semibold">
+            {notifications.slice(-5).map(n => n.msg).join(' • ')}
+          </div>
+        </div>
+      )}
+
+      {/* HOME VIEW */}
+      {currentView === 'home' && (
+        <div className="p-6">
+          {/* Logo y Título Principal */}
+          <div className="text-center mb-8">
+            <div className="bg-white w-32 h-32 rounded-full mx-auto mb-4 flex items-center justify-center shadow-2xl">
+              <div className="relative">
+                <Lock className="w-20 h-20 text-blue-900" />
+                <div className="absolute -bottom-2 -right-2 bg-blue-900 rounded-full p-2">
+                  <Shield className="w-6 h-6 text-white" />
+                </div>
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold mb-2">Control Lock</h2>
+            <p className="text-blue-200">Sistema de Seguridad Inteligente</p>
+          </div>
+
+          {/* Emergency Button */}
+          <div className="bg-gradient-to-br from-red-600 via-red-700 to-red-800 rounded-2xl p-8 mb-6 shadow-2xl border-4 border-red-400">
+            <button
+              onClick={handleEmergencyLock}
+              className="w-full text-center transform hover:scale-105 transition"
+            >
+              <AlertTriangle className="w-20 h-20 mx-auto mb-4 animate-pulse text-yellow-300" />
+              <h2 className="text-3xl font-bold mb-3 text-white">¡EMERGENCIA!</h2>
+              <p className="text-lg text-red-100">Presiona para activar modo robo</p>
+              <p className="text-sm text-red-200 mt-2">Bloqueo total + Sirena</p>
+            </button>
+          </div>
+
+          {/* Main Menu Buttons - Diseño como tu imagen */}
+          <div className="space-y-4">
+            <button
+              onClick={() => {
+                // Sin sirena, solo navega
+                setCurrentView('report');
+              }}
+              className="w-full bg-white text-blue-900 p-5 rounded-xl font-bold text-lg hover:bg-blue-50 transition shadow-lg transform hover:scale-105"
+            >
+              Reportar incidente
+            </button>
+            
+            <button
+              onClick={() => {
+                // Sin sirena, solo navega
+                setCurrentView('statistics');
+              }}
+              className="w-full bg-white text-blue-900 p-5 rounded-xl font-bold text-lg hover:bg-blue-50 transition shadow-lg transform hover:scale-105"
+            >
+              Estadísticas de incidentes
+            </button>
+            
+            <button
+              onClick={() => {
+                // Sin sirena, solo navega
+                setCurrentView('map');
+              }}
+              className="w-full bg-white text-blue-900 p-5 rounded-xl font-bold text-lg hover:bg-blue-50 transition shadow-lg transform hover:scale-105"
+            >
+              Mapa de zonas inseguras
+            </button>
+            
+            <button
+              onClick={() => {
+                // Sin sirena, solo navega
+                setCurrentView('users');
+              }}
+              className="w-full bg-white text-blue-900 p-5 rounded-xl font-bold text-lg hover:bg-blue-50 transition shadow-lg transform hover:scale-105"
+            >
+              Perfiles de usuarios
+            </button>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-2 gap-4 mt-6">
+            <button
+              onClick={() => {
+                // Sin sirena, solo navega
+                setCurrentView('monitoring');
+              }}
+              className="bg-gradient-to-br from-blue-600 to-blue-700 p-6 rounded-xl hover:from-blue-700 hover:to-blue-800 transition shadow-lg"
+            >
+              <Camera className="w-10 h-10 mx-auto mb-2" />
+              <p className="text-sm font-semibold">Monitoreo</p>
+            </button>
+            
+            <button
+              onClick={toggleAlarm}
+              className={`${isAlarmActive ? 'bg-gradient-to-br from-red-600 to-red-700' : 'bg-gradient-to-br from-green-600 to-green-700'} p-6 rounded-xl transition shadow-lg`}
+            >
+              {isAlarmActive ? <Unlock className="w-10 h-10 mx-auto mb-2" /> : <Lock className="w-10 h-10 mx-auto mb-2" />}
+              <p className="text-sm font-semibold">{isAlarmActive ? 'Desactivar' : 'Activar'}</p>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* REPORT INCIDENT VIEW */}
+      {currentView === 'report' && (
+        <div className="p-6">
+          <button 
+            onClick={() => {
+              // Sin sirena al volver
+              setCurrentView('home');
+            }} 
+            className="mb-6 text-blue-300 hover:text-blue-100 font-semibold flex items-center"
+          >
+            ← Volver al inicio
+          </button>
+          <h2 className="text-3xl font-bold mb-2">Reportar Incidente</h2>
+          <p className="text-blue-200 mb-6">Selecciona el tipo de emergencia</p>
+          
+          <div className="space-y-4">
+            {[
+              { type: 'Robo en proceso', color: 'from-red-600 to-red-700', icon: '🚨' },
+              { type: 'Persona sospechosa', color: 'from-orange-600 to-orange-700', icon: '👤' },
+              { type: 'Emergencia médica', color: 'from-pink-600 to-pink-700', icon: '🚑' },
+              { type: 'Incendio', color: 'from-yellow-600 to-yellow-700', icon: '🔥' },
+              { type: 'Accidente vehicular', color: 'from-purple-600 to-purple-700', icon: '🚗' },
+              { type: 'Disturbios', color: 'from-indigo-600 to-indigo-700', icon: '⚠️' },
+              { type: 'Otro', color: 'from-gray-600 to-gray-700', icon: '📢' }
+            ].map(item => (
+              <button
+                key={item.type}
+                onClick={() => {
+                  reportIncident(item.type);
+                  setTimeout(() => setCurrentView('home'), 1500);
+                }}
+                className={`w-full bg-gradient-to-r ${item.color} p-5 rounded-xl hover:shadow-2xl transition text-left flex items-center space-x-4 transform hover:scale-105`}
+              >
+                <span className="text-4xl">{item.icon}</span>
+                <div className="flex-1">
+                  <p className="font-bold text-lg">{item.type}</p>
+                  <p className="text-sm opacity-90">Toca para reportar</p>
+                </div>
+                <AlertTriangle className="w-6 h-6" />
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 bg-blue-900/50 p-4 rounded-xl">
+            <p className="text-sm text-blue-200">
+              ℹ️ Al reportar, se notificará automáticamente a las autoridades y tu ubicación será compartida.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* STATISTICS VIEW */}
+      {currentView === 'statistics' && (
+        <div className="p-6">
+          <button 
+            onClick={() => {
+              // Sin sirena al volver
+              setCurrentView('home');
+            }} 
+            className="mb-6 text-blue-300 hover:text-blue-100 font-semibold flex items-center"
+          >
+            ← Volver
+          </button>
+          <h2 className="text-3xl font-bold mb-2">Estadísticas</h2>
+          <p className="text-blue-200 mb-6">Análisis de incidentes de seguridad</p>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-5 rounded-xl shadow-lg">
+              <p className="text-blue-200 text-sm mb-1">Total Incidentes</p>
+              <p className="text-4xl font-bold">{statistics.totalIncidents}</p>
+            </div>
+            <div className="bg-gradient-to-br from-green-600 to-green-700 p-5 rounded-xl shadow-lg">
+              <p className="text-green-200 text-sm mb-1">Resueltos</p>
+              <p className="text-4xl font-bold">{statistics.resolved}</p>
+            </div>
+            <div className="bg-gradient-to-br from-yellow-600 to-yellow-700 p-5 rounded-xl shadow-lg">
+              <p className="text-yellow-200 text-sm mb-1">En Proceso</p>
+              <p className="text-4xl font-bold">{statistics.inProgress}</p>
+            </div>
+            <div className="bg-gradient-to-br from-red-600 to-red-700 p-5 rounded-xl shadow-lg">
+              <p className="text-red-200 text-sm mb-1">Pendientes</p>
+              <p className="text-4xl font-bold">{statistics.pending}</p>
+            </div>
+          </div>
+
+          {/* Monthly Comparison */}
+          <div className="bg-slate-800/70 p-5 rounded-xl shadow-lg mb-6">
+            <h3 className="font-bold text-lg mb-4 flex items-center">
+              <BarChart3 className="w-5 h-5 mr-2" />
+              Comparación Mensual
+            </h3>
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span>Este mes</span>
+                  <span className="font-bold">{statistics.thisMonth}</span>
+                </div>
+                <div className="w-full bg-slate-700 rounded-full h-3">
+                  <div className="bg-blue-500 h-3 rounded-full" style={{width: `${(statistics.thisMonth/30)*100}%`}}></div>
+                </div>
+              </div>
+              <div>
+                <div className="flex justify-between mb-2">
+                  <span>Mes anterior</span>
+                  <span className="font-bold">{statistics.lastMonth}</span>
+                </div>
+                <div className="w-full bg-slate-700 rounded-full h-3">
+                  <div className="bg-green-500 h-3 rounded-full" style={{width: `${(statistics.lastMonth/30)*100}%`}}></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent Incidents List */}
+          <div className="bg-slate-800/70 p-5 rounded-xl shadow-lg">
+            <h3 className="font-bold text-lg mb-4 flex items-center">
+              <Clock className="w-5 h-5 mr-2" />
+              Incidentes Recientes
+            </h3>
+            <div className="space-y-3">
+              {incidents.slice(0, 5).map(incident => (
+                <div key={incident.id} className="bg-slate-700/80 p-4 rounded-lg border-l-4 border-yellow-500">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-bold text-yellow-400">{incident.type}</span>
+                    <span className={`text-xs px-3 py-1 rounded-full ${
+                      incident.status === 'Resuelto' ? 'bg-green-600' :
+                      incident.status === 'En proceso' ? 'bg-yellow-600' :
+                      'bg-red-600'
+                    }`}>{incident.status}</span>
+                  </div>
+                  <p className="text-sm text-slate-300 mb-1">{incident.zone}</p>
+                  <p className="text-xs text-slate-400">{incident.date} • {incident.time}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MAP VIEW */}
+      {currentView === 'map' && (
+        <div className="p-6">
+          <button 
+            onClick={() => {
+              // Sin sirena al volver
+              setCurrentView('home');
+            }} 
+            className="mb-6 text-blue-300 hover:text-blue-100 font-semibold flex items-center"
+          >
+            ← Volver
+          </button>
+          <h2 className="text-3xl font-bold mb-2">Mapa de Zonas</h2>
+          <p className="text-blue-200 mb-6">Zonas con mayor índice de incidentes</p>
+          
+          {/* Map Container */}
+          <div className="bg-slate-800 rounded-xl overflow-hidden shadow-2xl mb-6 h-96 relative">
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-700 to-slate-800">
+              <div className="text-center">
+                <MapPin className="w-24 h-24 mx-auto mb-4 text-red-400 animate-bounce" />
+                <p className="text-xl font-bold mb-2">Mapa Interactivo</p>
+                <p className="text-slate-400">Lima, Perú</p>
+              </div>
+            </div>
+            
+            {/* Markers overlay */}
+            <div className="absolute top-10 left-10">
+              <div className="bg-red-600 p-3 rounded-full shadow-lg animate-pulse">
+                <MapPin className="w-6 h-6" />
+              </div>
+            </div>
+            <div className="absolute top-32 right-20">
+              <div className="bg-yellow-600 p-3 rounded-full shadow-lg animate-pulse" style={{animationDelay: '0.5s'}}>
+                <MapPin className="w-6 h-6" />
+              </div>
+            </div>
+            <div className="absolute bottom-20 left-24">
+              <div className="bg-orange-600 p-3 rounded-full shadow-lg animate-pulse" style={{animationDelay: '1s'}}>
+                <MapPin className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
+
+          {/* Zone List */}
+          <div className="space-y-3">
+            <h3 className="font-bold text-lg mb-3">Zonas de Alto Riesgo</h3>
+            {[
+              { name: 'Zona A - Av. Principal', risk: 'Alto', incidents: 45, color: 'red' },
+              { name: 'Zona B - Parque Central', risk: 'Medio', incidents: 28, color: 'yellow' },
+              { name: 'Zona C - Residencial', risk: 'Medio', incidents: 23, color: 'yellow' },
+              { name: 'Zona D - Centro Comercial', risk: 'Bajo', incidents: 12, color: 'green' }
+            ].map((zone, idx) => (
+              <button
+                key={idx}
+                onClick={() => handleButtonClick(`Ver detalles de ${zone.name}`)}
+                className="w-full bg-slate-800/70 p-4 rounded-xl text-left hover:bg-slate-700 transition"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center space-x-3">
+                    <MapPin className={`w-6 h-6 text-${zone.color}-500`} />
+                    <div>
+                      <p className="font-bold">{zone.name}</p>
+                      <p className="text-sm text-slate-400">{zone.incidents} incidentes</p>
+                    </div>
+                  </div>
+                  <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                    zone.color === 'red' ? 'bg-red-600' :
+                    zone.color === 'yellow' ? 'bg-yellow-600' :
+                    'bg-green-600'
+                  }`}>
+                    {zone.risk}
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* USERS VIEW */}
+      {currentView === 'users' && (
+        <div className="p-6">
+          <button 
+            onClick={() => {
+              // Sin sirena al volver
+              setCurrentView('home');
+            }} 
+            className="mb-6 text-blue-300 hover:text-blue-100 font-semibold flex items-center"
+          >
+            ← Volver
+          </button>
+          <h2 className="text-3xl font-bold mb-2">Perfiles de Usuarios</h2>
+          <p className="text-blue-200 mb-6">Gestión de accesos y permisos</p>
+
+          {/* Add User Button */}
+          <button
+            onClick={() => handleButtonClick('Agregar nuevo usuario')}
+            className="w-full bg-gradient-to-r from-green-600 to-green-700 p-4 rounded-xl mb-6 hover:from-green-700 hover:to-green-800 transition shadow-lg flex items-center justify-center space-x-2"
+          >
+            <Users className="w-6 h-6" />
+            <span className="font-bold">Agregar Nuevo Usuario</span>
+          </button>
+
+          {/* Users List */}
+          <div className="space-y-4">
+            {users.map(user => (
+              <div key={user.id} className="bg-slate-800/70 p-5 rounded-xl shadow-lg">
+                <div className="flex items-start space-x-4">
+                  <div className="bg-blue-600 p-4 rounded-full">
+                    <User className="w-8 h-8" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="font-bold text-lg">{user.name}</h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        user.status === 'Activo' ? 'bg-green-600' : 'bg-gray-600'
+                      }`}>
+                        {user.status}
+                      </span>
+                    </div>
+                    <p className="text-blue-300 mb-2">{user.role}</p>
+                    <p className="text-sm text-slate-400">{user.lastSeen}</p>
+                    
+                    <div className="flex space-x-2 mt-4">
+                      <button
+                        onClick={() => handleButtonClick(`Editar usuario ${user.name}`)}
+                        className="flex-1 bg-blue-600 py-2 px-4 rounded-lg hover:bg-blue-700 transition text-sm font-semibold"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => handleButtonClick(`Ver permisos de ${user.name}`)}
+                        className="flex-1 bg-purple-600 py-2 px-4 rounded-lg hover:bg-purple-700 transition text-sm font-semibold"
+                      >
+                        Permisos
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* MONITORING VIEW */}
+      {currentView === 'monitoring' && !selectedCamera && !showHistory && (
+        <div className="p-6">
+          <button 
+            onClick={() => {
+              setCurrentView('home');
+            }} 
+            className="mb-6 text-blue-300 hover:text-blue-100 font-semibold flex items-center"
+          >
+            ← Volver
+          </button>
+          <h2 className="text-3xl font-bold mb-2">Monitoreo en Vivo</h2>
+          <p className="text-blue-200 mb-6">Cámaras de seguridad activas</p>
+          
+          <div className="grid grid-cols-2 gap-4">
+            {cameras.map(cam => (
+              <button
+                key={cam.id}
+                onClick={() => {
+                  setSelectedCamera(cam);
+                  addNotification(`📹 Abriendo cámara ${cam.name}`);
+                }}
+                className="bg-slate-800 rounded-xl overflow-hidden shadow-lg hover:shadow-2xl transition transform hover:scale-105"
+              >
+                <div className="relative h-32 overflow-hidden">
+                  <img 
+                    src={cam.img} 
+                    alt={cam.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                  <div className="hidden absolute inset-0 bg-gradient-to-br from-slate-700 to-slate-800 items-center justify-center">
+                    <Camera className="w-12 h-12 text-slate-500" />
+                  </div>
+                  
+                  <div className="absolute inset-0 bg-black/20">
+                    <div className="absolute top-2 left-2 bg-red-600 px-2 py-1 rounded text-xs font-bold flex items-center space-x-1 animate-pulse">
+                      <div className="w-2 h-2 bg-white rounded-full"></div>
+                      <span>EN VIVO</span>
+                    </div>
+                    
+                    <div className="absolute top-2 right-2 bg-green-500 w-3 h-3 rounded-full animate-pulse"></div>
+                    
+                    <div className="absolute bottom-2 left-2 bg-black/70 px-2 py-1 rounded text-xs">
+                      {new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    </div>
+
+                    <Camera className="absolute bottom-2 right-2 w-4 h-4 text-white/80" />
+                  </div>
+                </div>
+                
+                <div className="p-3 bg-slate-900">
+                  <p className="text-sm font-semibold text-white">Cámara {cam.id}</p>
+                  <p className="text-xs text-slate-400">{cam.name}</p>
+                  <div className="flex items-center mt-2 space-x-2">
+                    <div className="flex-1 bg-slate-700 h-1 rounded-full overflow-hidden">
+                      <div className="bg-green-500 h-full w-4/5"></div>
+                    </div>
+                    <span className="text-xs text-green-400">HD</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-6 bg-slate-800/70 p-5 rounded-xl">
+            <h3 className="font-bold mb-3">Control Rápido</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  setIsRecording(!isRecording);
+                  addNotification(isRecording ? '⏹️ Grabación detenida' : '⏺️ Grabando todas las cámaras');
+                }}
+                className={`${isRecording ? 'bg-red-700' : 'bg-red-600'} py-3 px-4 rounded-lg hover:bg-red-700 transition font-semibold flex items-center justify-center space-x-2`}
+              >
+                <span>{isRecording ? '⏹️' : '⏺️'}</span>
+                <span>{isRecording ? 'Detener' : 'Grabar Todo'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  addNotification('📸 Captura guardada en galería');
+                }}
+                className="bg-blue-600 py-3 px-4 rounded-lg hover:bg-blue-700 transition font-semibold flex items-center justify-center space-x-2"
+              >
+                <span>📸</span>
+                <span>Capturar</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowHistory(true);
+                  addNotification('📂 Abriendo historial de grabaciones');
+                }}
+                className="bg-purple-600 py-3 px-4 rounded-lg hover:bg-purple-700 transition font-semibold flex items-center justify-center space-x-2"
+              >
+                <span>⏮️</span>
+                <span>Ver Historial</span>
+              </button>
+              <button
+                onClick={() => {
+                  addNotification('📤 Transmisión compartida exitosamente');
+                }}
+                className="bg-green-600 py-3 px-4 rounded-lg hover:bg-green-700 transition font-semibold flex items-center justify-center space-x-2"
+              >
+                <span>📤</span>
+                <span>Compartir</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="bg-slate-800/70 p-4 rounded-xl text-center">
+              <p className="text-2xl font-bold text-green-400">6/6</p>
+              <p className="text-xs text-slate-400">Activas</p>
+            </div>
+            <div className="bg-slate-800/70 p-4 rounded-xl text-center">
+              <p className="text-2xl font-bold text-blue-400">24h</p>
+              <p className="text-xs text-slate-400">Grabando</p>
+            </div>
+            <div className="bg-slate-800/70 p-4 rounded-xl text-center">
+              <p className="text-2xl font-bold text-purple-400">1080p</p>
+              <p className="text-xs text-slate-400">Calidad</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CAMERA FULLSCREEN VIEW */}
+      {selectedCamera && !showHistory && (
+        <div className="p-6">
+          <button 
+            onClick={() => {
+              setSelectedCamera(null);
+              addNotification('✅ Cerrando vista de cámara');
+            }} 
+            className="mb-6 text-blue-300 hover:text-blue-100 font-semibold flex items-center"
+          >
+            ← Volver a Monitoreo
+          </button>
+          
+          <div className="bg-slate-800 rounded-2xl overflow-hidden shadow-2xl mb-6">
+            <div className="relative h-96">
+              <img 
+                src={selectedCamera.img} 
+                alt={selectedCamera.name}
+                className="w-full h-full object-cover"
+              />
+              
+              <div className="absolute inset-0 bg-black/10">
+                <div className="absolute top-4 left-4 bg-red-600 px-4 py-2 rounded-lg text-sm font-bold flex items-center space-x-2 animate-pulse">
+                  <div className="w-3 h-3 bg-white rounded-full"></div>
+                  <span>EN VIVO - {selectedCamera.name}</span>
+                </div>
+                
+                <div className="absolute top-4 right-4 bg-black/70 px-4 py-2 rounded-lg text-sm">
+                  {new Date().toLocaleTimeString('es-PE')}
+                </div>
+
+                <div className="absolute bottom-4 left-4 right-4 bg-black/70 backdrop-blur-sm p-4 rounded-lg">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-bold text-lg">Cámara {selectedCamera.id}</p>
+                      <p className="text-sm text-slate-300">{selectedCamera.name}</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="bg-green-500 w-3 h-3 rounded-full animate-pulse"></div>
+                      <span className="text-sm font-semibold">Activa</span>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-4 gap-2">
+                    <button
+                      onClick={() => addNotification('📸 Foto capturada')}
+                      className="bg-blue-600 py-2 rounded-lg hover:bg-blue-700 transition text-sm font-semibold"
+                    >
+                      📸 Foto
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsRecording(!isRecording);
+                        addNotification(isRecording ? '⏹️ Grabación detenida' : '⏺️ Grabando...');
+                      }}
+                      className={`${isRecording ? 'bg-red-700' : 'bg-red-600'} py-2 rounded-lg hover:bg-red-700 transition text-sm font-semibold`}
+                    >
+                      {isRecording ? '⏹️' : '⏺️'} {isRecording ? 'Stop' : 'Rec'}
+                    </button>
+                    <button
+                      onClick={() => addNotification('🔊 Audio activado')}
+                      className="bg-purple-600 py-2 rounded-lg hover:bg-purple-700 transition text-sm font-semibold"
+                    >
+                      🔊 Audio
+                    </button>
+                    <button
+                      onClick={() => addNotification('📤 Compartido')}
+                      className="bg-green-600 py-2 rounded-lg hover:bg-green-700 transition text-sm font-semibold"
+                    >
+                      📤 Share
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Camera Info */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="bg-slate-800/70 p-4 rounded-xl">
+              <p className="text-slate-400 text-sm mb-1">Resolución</p>
+              <p className="text-xl font-bold text-green-400">1920x1080</p>
+            </div>
+            <div className="bg-slate-800/70 p-4 rounded-xl">
+              <p className="text-slate-400 text-sm mb-1">FPS</p>
+              <p className="text-xl font-bold text-blue-400">30 fps</p>
+            </div>
+            <div className="bg-slate-800/70 p-4 rounded-xl">
+              <p className="text-slate-400 text-sm mb-1">Bitrate</p>
+              <p className="text-xl font-bold text-purple-400">2.5 Mbps</p>
+            </div>
+            <div className="bg-slate-800/70 p-4 rounded-xl">
+              <p className="text-slate-400 text-sm mb-1">Almacenamiento</p>
+              <p className="text-xl font-bold text-yellow-400">45 GB</p>
+            </div>
+          </div>
+
+          {/* Quick Settings */}
+          <div className="bg-slate-800/70 p-5 rounded-xl">
+            <h3 className="font-bold mb-4">Configuración Rápida</h3>
+            <div className="space-y-3">
+              <label className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                <span>Detección de movimiento</span>
+                <input type="checkbox" defaultChecked className="w-5 h-5 accent-blue-600" />
+              </label>
+              <label className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                <span>Visión nocturna</span>
+                <input type="checkbox" defaultChecked className="w-5 h-5 accent-blue-600" />
+              </label>
+              <label className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg">
+                <span>Grabación continua</span>
+                <input type="checkbox" defaultChecked className="w-5 h-5 accent-blue-600" />
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HISTORY VIEW */}
+      {showHistory && (
+        <div className="p-6">
+          <button 
+            onClick={() => {
+              setShowHistory(false);
+              addNotification('✅ Cerrando historial');
+            }} 
+            className="mb-6 text-blue-300 hover:text-blue-100 font-semibold flex items-center"
+          >
+            ← Volver a Monitoreo
+          </button>
+          
+          <h2 className="text-3xl font-bold mb-2">Historial de Grabaciones</h2>
+          <p className="text-blue-200 mb-6">Últimas grabaciones guardadas</p>
+
+          <div className="space-y-4">
+            {recordings.map(rec => (
+              <div key={rec.id} className="bg-slate-800 rounded-xl overflow-hidden shadow-lg">
+                <div className="flex">
+                  <div className="relative w-32 h-32">
+                    <img 
+                      src={rec.thumbnail} 
+                      alt={rec.camera}
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                      <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center hover:bg-blue-700 transition cursor-pointer">
+                        <span className="text-2xl">▶️</span>
+                      </div>
+                    </div>
+                    <div className="absolute bottom-2 right-2 bg-black/80 px-2 py-1 rounded text-xs font-bold">
+                      {rec.duration}
+                    </div>
+                  </div>
+                  
+                  <div className="flex-1 p-4">
+                    <h3 className="font-bold text-lg mb-1">{rec.camera}</h3>
+                    <p className="text-sm text-slate-400 mb-3">{rec.date} • {rec.time}</p>
+                    
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => addNotification(`▶️ Reproduciendo: ${rec.camera}`)}
+                        className="bg-blue-600 px-3 py-2 rounded-lg hover:bg-blue-700 transition text-xs font-semibold"
+                      >
+                        ▶️ Ver
+                      </button>
+                      <button
+                        onClick={() => addNotification(`💾 Descargando: ${rec.camera}`)}
+                        className="bg-green-600 px-3 py-2 rounded-lg hover:bg-green-700 transition text-xs font-semibold"
+                      >
+                        💾 Descargar
+                      </button>
+                      <button
+                        onClick={() => addNotification(`📤 Compartiendo: ${rec.camera}`)}
+                        className="bg-purple-600 px-3 py-2 rounded-lg hover:bg-purple-700 transition text-xs font-semibold"
+                      >
+                        📤 Compartir
+                      </button>
+                      <button
+                        onClick={() => addNotification(`🗑️ Eliminado: ${rec.camera}`)}
+                        className="bg-red-600 px-3 py-2 rounded-lg hover:bg-red-700 transition text-xs font-semibold"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 bg-slate-800/70 p-5 rounded-xl text-center">
+            <p className="text-slate-400 mb-2">Total de grabaciones</p>
+            <p className="text-3xl font-bold text-blue-400 mb-4">{recordings.length}</p>
+            <button
+              onClick={() => addNotification('🗑️ Eliminando todas las grabaciones antiguas...')}
+              className="bg-red-600 px-6 py-3 rounded-lg hover:bg-red-700 transition font-semibold"
+            >
+              🗑️ Limpiar Historial Antiguo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-sm border-t border-slate-700 p-4 flex justify-around shadow-2xl">
+        <button 
+          onClick={() => {
+            // Sin sirena en navegación
+            setCurrentView('home');
+          }} 
+          className={`flex flex-col items-center ${currentView === 'home' ? 'text-blue-400' : 'text-slate-400'} hover:text-white transition`}
+        >
+          <Shield className="w-6 h-6 mb-1" />
+          <span className="text-xs font-semibold">Inicio</span>
+        </button>
+        <button 
+          onClick={() => {
+            // Sin sirena en navegación
+            setCurrentView('statistics');
+          }} 
+          className={`flex flex-col items-center ${currentView === 'statistics' ? 'text-blue-400' : 'text-slate-400'} hover:text-white transition`}
+        >
+          <BarChart3 className="w-6 h-6 mb-1" />
+          <span className="text-xs font-semibold">Stats</span>
+        </button>
+        <button 
+          onClick={() => {
+            // Sin sirena en navegación
+            setCurrentView('map');
+          }} 
+          className={`flex flex-col items-center ${currentView === 'map' ? 'text-blue-400' : 'text-slate-400'} hover:text-white transition`}
+        >
+          <Map className="w-6 h-6 mb-1" />
+          <span className="text-xs font-semibold">Mapa</span>
+        </button>
+        <button 
+          onClick={() => {
+            // Sin sirena en navegación
+            setCurrentView('settings');
+          }} 
+          className={`flex flex-col items-center ${currentView === 'settings' ? 'text-blue-400' : 'text-slate-400'} hover:text-white transition`}
+        >
+          <Settings className="w-6 h-6 mb-1" />
+          <span className="text-xs font-semibold">Config</span>
+        </button>
+      </div>
+
+      {/* SETTINGS VIEW */}
+      {currentView === 'settings' && (
+        <div className="p-6">
+          <button 
+            onClick={() => {
+              // Sin sirena al volver
+              setCurrentView('home');
+            }} 
+            className="mb-6 text-blue-300 hover:text-blue-100 font-semibold flex items-center"
+          >
+            ← Volver
+          </button>
+          <h2 className="text-3xl font-bold mb-2">Configuración</h2>
+          <p className="text-blue-200 mb-6">Personaliza tu experiencia</p>
+
+          <div className="space-y-4">
+            {/* Notifications */}
+            <div className="bg-slate-800/70 p-5 rounded-xl">
+              <h3 className="font-bold text-lg mb-4 flex items-center">
+                <Bell className="w-5 h-5 mr-2" />
+                Notificaciones
+              </h3>
+              <div className="space-y-3">
+                {[
+                  'Alertas de emergencia',
+                  'Notificaciones push',
+                  'Alertas de movimiento',
+                  'Sonido de sirena'
+                ].map(option => (
+                  <label key={option} className="flex items-center justify-between p-3 bg-slate-700/50 rounded-lg cursor-pointer hover:bg-slate-700 transition">
+                    <span>{option}</span>
+                    <input 
+                      type="checkbox" 
+                      defaultChecked 
+                      onChange={() => playSiren()}
+                      className="w-6 h-6 accent-blue-600" 
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+            
+            {/* Security */}
+            <div className="bg-slate-800/70 p-5 rounded-xl">
+              <h3 className="font-bold text-lg mb-4 flex items-center">
+                <Lock className="w-5 h-5 mr-2" />
+                Seguridad
+              </h3>
+              <button 
+                onClick={() => handleButtonClick('Configuración de huella digital')}
+                className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4 rounded-lg hover:from-blue-700 hover:to-blue-800 transition shadow-lg flex items-center justify-center space-x-2"
+              >
+                <Fingerprint className="w-5 h-5" />
+                <span className="font-semibold">Configurar Huella Digital</span>
+              </button>
+            </div>
+
+            {/* Support */}
+            <div className="bg-slate-800/70 p-5 rounded-xl">
+              <h3 className="font-bold text-lg mb-4 flex items-center">
+                <Phone className="w-5 h-5 mr-2" />
+                Soporte Técnico 24/7
+              </h3>
+              <p className="text-slate-300 mb-4">¿Necesitas ayuda? Contáctanos en cualquier momento</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  onClick={() => handleButtonClick('Iniciando chat en vivo')}
+                  className="bg-green-600 text-white p-3 rounded-lg hover:bg-green-700 transition font-semibold"
+                >
+                  💬 Chat
+                </button>
+                <button 
+                  onClick={() => handleButtonClick('Llamando a soporte')}
+                  className="bg-blue-600 text-white p-3 rounded-lg hover:bg-blue-700 transition font-semibold"
+                >
+                  📞 Llamar
+                </button>
+              </div>
+            </div>
+
+            {/* Emergency Contacts */}
+            <div className="bg-slate-800/70 p-5 rounded-xl">
+              <h3 className="font-bold text-lg mb-4">Contactos de Emergencia</h3>
+              <div className="space-y-2">
+                {[
+                  { name: 'Policía Nacional', number: '105', icon: '🚓' },
+                  { name: 'Bomberos', number: '116', icon: '🚒' },
+                  { name: 'Ambulancia', number: '117', icon: '🚑' },
+                  { name: 'Serenazgo', number: '106', icon: '👮' }
+                ].map(contact => (
+                  <button
+                    key={contact.number}
+                    onClick={() => handleButtonClick(`Llamando a ${contact.name}`)}
+                    className="w-full bg-slate-700/80 p-4 rounded-lg hover:bg-slate-600 transition flex items-center justify-between"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="text-2xl">{contact.icon}</span>
+                      <div className="text-left">
+                        <p className="font-semibold">{contact.name}</p>
+                        <p className="text-slate-400 text-sm">{contact.number}</p>
+                      </div>
+                    </div>
+                    <Phone className="w-5 h-5 text-green-400" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* App Info */}
+            <div className="bg-slate-800/70 p-5 rounded-xl text-center">
+              <Shield className="w-16 h-16 mx-auto mb-3 text-blue-400" />
+              <p className="font-bold text-lg mb-1">Control Lock</p>
+              <p className="text-slate-400 text-sm mb-2">Versión 2.0.0</p>
+              <p className="text-xs text-slate-500">© 2024 Control Lock. Todos los derechos reservados.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes marquee {
+          0% { transform: translateX(100%); }
+          100% { transform: translateX(-100%); }
+        }
+        .animate-marquee {
+          display: inline-block;
+          animation: marquee 20s linear infinite;
+        }
+      `}</style>
+    </div>
+  );
+}
